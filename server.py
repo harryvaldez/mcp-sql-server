@@ -419,12 +419,13 @@ class BrowserFriendlyMiddleware(BaseHTTPMiddleware):
 
 
 def _build_connection_string_from_env() -> str | None:
-    server = os.environ.get("SQL_SERVER")
-    port = os.environ.get("SQL_PORT", "1433")
-    user = os.environ.get("SQL_USER")
-    password = os.environ.get("SQL_PASSWORD")
-    database = os.environ.get("SQL_DATABASE")
-    driver = os.environ.get("SQL_DRIVER", "ODBC Driver 17 for SQL Server")
+    # Try DB_* convention first (DOCKER.md), then SQL_* fallback
+    server = os.environ.get("DB_SERVER") or os.environ.get("SQL_SERVER")
+    port = os.environ.get("DB_PORT") or os.environ.get("SQL_PORT", "1433")
+    user = os.environ.get("DB_USER") or os.environ.get("SQL_USER")
+    password = os.environ.get("DB_PASSWORD") or os.environ.get("SQL_PASSWORD")
+    database = os.environ.get("DB_NAME") or os.environ.get("SQL_DATABASE")
+    driver = os.environ.get("DB_DRIVER") or os.environ.get("SQL_DRIVER", "ODBC Driver 17 for SQL Server")
     
     if not server or not user or not database:
         return None
@@ -435,13 +436,13 @@ def _build_connection_string_from_env() -> str | None:
 CONNECTION_STRING = os.environ.get("SQL_CONNECTION_STRING") or _build_connection_string_from_env()
 if not CONNECTION_STRING:
     raise RuntimeError(
-        "Missing SQL_CONNECTION_STRING or SQL_SERVER/SQL_USER/SQL_DATABASE environment variables"
+        "Missing configuration. Please set DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD (or SQL_* equivalents)."
     )
 
 # Capture original connection details
-ORIGINAL_DB_HOST = os.environ.get("SQL_SERVER")
-ORIGINAL_DB_PORT = int(os.environ.get("SQL_PORT", 1433))
-ORIGINAL_DB_NAME = os.environ.get("SQL_DATABASE")
+ORIGINAL_DB_HOST = os.environ.get("DB_SERVER") or os.environ.get("SQL_SERVER")
+ORIGINAL_DB_PORT = int(os.environ.get("DB_PORT") or os.environ.get("SQL_PORT", 1433))
+ORIGINAL_DB_NAME = os.environ.get("DB_NAME") or os.environ.get("SQL_DATABASE")
 
 if os.environ.get("MCP_ALLOW_WRITE") is None:
     raise RuntimeError("MCP_ALLOW_WRITE environment variable is required (e.g. 'true' or 'false')")
