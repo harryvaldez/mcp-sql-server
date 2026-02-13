@@ -498,7 +498,8 @@ if SSH_HOST and SSH_USER:
         raise RuntimeError(
             "SSH requested but SQL_SERVER is missing."
         )
-    
+
+    try:
         # Read allow_agent configuration from environment variable
         allow_ssh_agent = os.environ.get("ALLOW_SSH_AGENT", "false").lower() in ("true", "1", "yes", "on")
         
@@ -906,15 +907,6 @@ def db_sql2019_drop_db_user(username: str) -> str:
         return f"User and Login '{username}' dropped successfully from '{current_db}'."
     finally:
         conn.close()
-            _execute_safe(
-                cur,
-                sql.SQL("DROP OWNED BY {}").format(sql.Identifier(username)),
-            )
-            _execute_safe(
-                cur,
-                sql.SQL("DROP ROLE {}").format(sql.Identifier(username)),
-            )
-            return f"User '{username}' dropped successfully."
 
 
 @mcp.tool
@@ -2192,7 +2184,7 @@ def db_sql2019_list_objects(
                 SELECT TOP (?)
                     s.name as [schema],
                     t.name as [name],
-                    SUM(p.rows) as [rows], -- Sum rows for partitioned tables? Actually sys.partitions has rows per partition.
+                    SUM(ps.row_count) as [rows], -- Sum rows for partitioned tables
                     -- For simple heap/clustered, index_id 0 or 1. 
                     -- Let's use a simpler DMV approach for size if possible or just sys.dm_db_partition_stats
                     (SUM(ps.reserved_page_count) * 8) as size_kb,
@@ -3272,8 +3264,10 @@ def db_sql2019_run_query(sql: str, params_json: str | None = None, max_rows: int
         
         if cur.description:
             columns = [d[0] for d in cur.description]
+            rows = [dict(zip(columns, row)) for row in rows]
         else:
             columns = []
+            rows = []
             
         return {
             "columns": columns,

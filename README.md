@@ -582,6 +582,25 @@ The analysis of the `Sales` schema reveals...
 
 This project has been rigorously tested against **SQL Server 2019**.
 
+### Running Tests
+
+To run the comprehensive test suite (Unit, Integration, Stress, Blackbox):
+
+1.  **Prerequisites**:
+    *   Docker (for provisioning the temporary SQL Server container)
+    *   Python 3.10+
+    *   `pip install pytest pyodbc docker pandas numpy`
+
+2.  **Run Tests**:
+    This command will automatically provision a SQL Server 2019 container, populate it with sample data, and run all tests.
+    ```bash
+    # 1. Provision Test Database
+    python tests/setup_sql_server.py
+    
+    # 2. Run Test Suite
+    python -m pytest tests/test_server.py
+    ```
+
 ### Test Results
 - **Deployment**: Docker, `uv`, `npx` (All Passed)
 - **Protocol**: SSE (HTTP/HTTPS), Stdio (All Passed)
