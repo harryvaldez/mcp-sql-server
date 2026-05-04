@@ -19,7 +19,7 @@ click==8.3.1
 cloudpickle==3.1.2
 colorama==0.4.6
 croniter==6.0.0
-cryptography==46.0.5
+cryptography==47.0.0
 cyclopts==4.5.4
 diskcache==5.6.3
 dnspython==2.8.0
