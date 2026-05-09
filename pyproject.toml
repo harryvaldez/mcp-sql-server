@@ -10,7 +10,7 @@ dependencies = [
   "prefab-ui==0.19.1",
   "pydantic>=2.8.0",
   "PyYAML>=6.0.1",
-  "prometheus-client>=0.20.0",
+  "prometheus-client>=0.25.0",
   "redis>=5.0.7",
   "pyodbc>=5.1.0",
 ]
