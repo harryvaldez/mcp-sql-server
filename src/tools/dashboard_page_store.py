@@ -16,6 +16,17 @@ def _now_epoch() -> float:
     return time.time()
 
 
+def _to_float_or_default(value: object, default: float = 0.0) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
 def _validate_request_id(request_id: str) -> None:
     """Validate request_id format: alphanumerics, hyphen, underscore only."""
     if not isinstance(request_id, str) or not request_id.strip():
@@ -53,7 +64,7 @@ def _cleanup_expired(now_epoch: float) -> None:
     expired_ids = [
         request_id
         for request_id, entry in _DASHBOARD_PAGES.items()
-        if float(entry.get("expires_epoch", 0.0)) <= now_epoch
+        if _to_float_or_default(entry.get("expires_epoch", 0.0)) <= now_epoch
     ]
     for request_id in expired_ids:
         _DASHBOARD_PAGES.pop(request_id, None)
@@ -88,7 +99,7 @@ def get_dashboard_page(request_id: str) -> str | None:
         entry = _DASHBOARD_PAGES.get(request_id)
         if entry is None:
             return None
-        expires_epoch = float(entry.get("expires_epoch", 0.0))
+        expires_epoch = _to_float_or_default(entry.get("expires_epoch", 0.0))
         if expires_epoch <= now_epoch:
             _DASHBOARD_PAGES.pop(request_id, None)
             return None
@@ -104,7 +115,7 @@ def get_dashboard_page_expiry_utc(request_id: str) -> str | None:
         entry = _DASHBOARD_PAGES.get(request_id)
         if entry is None:
             return None
-        expires_epoch = float(entry.get("expires_epoch", 0.0))
+        expires_epoch = _to_float_or_default(entry.get("expires_epoch", 0.0))
         if expires_epoch <= now_epoch:
             _DASHBOARD_PAGES.pop(request_id, None)
             return None

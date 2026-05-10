@@ -43,7 +43,7 @@ class ConnectionManager:
         password = creds.get("password")
         database_name = database_override or instance.database
         return (
-            "DRIVER={ODBC Driver 18 for SQL Server};"
+            "DRIVER={ODBC Driver 17 for SQL Server};"
             f"SERVER={instance.host},{instance.port};"
             f"DATABASE={database_name};"
             f"UID={user};PWD={password};"
@@ -76,6 +76,15 @@ class ConnectionManager:
             if item is conn:
                 state["in_use"].pop(idx)
                 return
+
+    def _configure_connection_timeout(
+        self,
+        conn: pyodbc.Connection,
+        instance_id: str,
+    ) -> pyodbc.Connection:
+        instance = self._instances[instance_id]
+        conn.timeout = max(0, int(instance.command_timeout_sec))
+        return conn
 
     def _acquire_connection(
         self, instance_id: str, database_override: str | None = None
@@ -185,6 +194,7 @@ class ConnectionManager:
         conn, pooled = self._acquire_connection(
             instance_id, database_override=database_override
         )
+        conn = self._configure_connection_timeout(conn, instance_id)
         had_error = False
         try:
             yield conn

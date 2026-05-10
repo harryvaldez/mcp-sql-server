@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from datetime import datetime, timezone
 from typing import Any
 
@@ -32,23 +33,22 @@ def register_sessions_dashboard_app_provider(mcp: FastMCP, state: Any) -> bool:
     interactive app dependencies are unavailable or initialization fails.
     """
     try:
-        from fastmcp import FastMCPApp
-        from prefab_ui.actions import ShowToast
-        from prefab_ui.actions.mcp import CallTool
-        from prefab_ui.app import PrefabApp
-        from prefab_ui.components import (
-            Button,
-            Column,
-            Form,
-            Heading,
-            Input,
-            Row,
-            Select,
-            SelectOption,
-            Separator,
-            Text,
-            ForEach,
-        )
+        FastMCPApp = getattr(importlib.import_module("fastmcp"), "FastMCPApp")
+        ShowToast = getattr(importlib.import_module("prefab_ui.actions"), "ShowToast")
+        CallTool = getattr(importlib.import_module("prefab_ui.actions.mcp"), "CallTool")
+        PrefabApp = getattr(importlib.import_module("prefab_ui.app"), "PrefabApp")
+        components = importlib.import_module("prefab_ui.components")
+        Button = getattr(components, "Button")
+        Column = getattr(components, "Column")
+        Form = getattr(components, "Form")
+        Heading = getattr(components, "Heading")
+        Input = getattr(components, "Input")
+        Row = getattr(components, "Row")
+        Select = getattr(components, "Select")
+        SelectOption = getattr(components, "SelectOption")
+        Separator = getattr(components, "Separator")
+        Text = getattr(components, "Text")
+        ForEach = getattr(components, "ForEach")
     except Exception as exc:  # pragma: no cover - environment-specific optional deps
         logger.warning(
             "Interactive app dependencies unavailable; sessions app provider disabled: %s",

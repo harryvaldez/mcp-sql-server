@@ -816,6 +816,35 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
             group_match_result=(auth_ctx or {}).get("group_match_result"),
         )
 
+    def _resolve_session_key(actor: str, ctx: Context | None) -> str:
+        actor_key = actor.strip() if isinstance(actor, str) and actor.strip() else "unknown"
+
+        # Prefer MCP transport session identity when available.
+        request_context = getattr(ctx, "request_context", None) if ctx is not None else None
+        for attr_name in ("session_id", "mcp_session_id", "id"):
+            value = getattr(request_context, attr_name, None)
+            if isinstance(value, str) and value.strip():
+                return f"mcp:{value.strip()}"
+
+        # Fallback to token claims for authenticated requests.
+        try:
+            token = get_access_token()
+        except Exception:
+            token = None
+
+        if token is not None:
+            claims = getattr(token, "claims", {}) or {}
+            for claim_name in ("sid", "jti", "oid", "sub"):
+                value = claims.get(claim_name)
+                if isinstance(value, str) and value.strip():
+                    return f"token:{value.strip()}"
+
+        return f"actor:{actor_key}"
+
+    def _touch_session(*, actor: str, ctx: Context | None) -> None:
+        session_key = _resolve_session_key(actor, ctx)
+        state.session_manager.touch(actor, session_key)
+
     async def _run_read_tool(
         *,
         sql: str,
@@ -849,7 +878,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                 required_privilege="read",
                 ctx=ctx,
             )
-            state.session_manager.touch(actor, request_id)
+            _touch_session(actor=actor, ctx=ctx)
             if ctx is not None:
                 await ctx.debug(f"[{request_id}] Session validated for {actor}")
 
@@ -1018,7 +1047,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                         required_privilege="read",
                         ctx=ctx,
                     )
-                    state.session_manager.touch(actor, request_id)
+                    _touch_session(actor=actor, ctx=ctx)
                     state.rate_limiter.allow(actor)
                     state.write_guard.enforce(_tool, sql)
                     result = state.connection_manager.execute_read(
@@ -1139,7 +1168,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                         required_privilege="write",
                         ctx=ctx,
                     )
-                    state.session_manager.touch(actor, request_id)
+                    _touch_session(actor=actor, ctx=ctx)
                     state.rate_limiter.allow(actor)
                     state.write_guard.validate_procedure(_tool, proc_name)
                     state.write_guard.enforce(
@@ -1583,7 +1612,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                     required_privilege="read",
                     ctx=ctx,
                 )
-                state.session_manager.touch(actor, request_id)
+                _touch_session(actor=actor, ctx=ctx)
                 state.rate_limiter.allow(actor)
                 payload = state.connection_manager.fetch_single_row_in_database(
                     _instance, "master", sql
@@ -1697,7 +1726,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                     required_privilege="read",
                     ctx=ctx,
                 )
-                state.session_manager.touch(actor, request_id)
+                _touch_session(actor=actor, ctx=ctx)
                 state.rate_limiter.allow(actor)
                 info = state.connection_manager.fetch_single_row_in_database(
                     _instance, "master", sql
@@ -1833,7 +1862,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                     required_privilege="read",
                     ctx=ctx,
                 )
-                state.session_manager.touch(actor, request_id)
+                _touch_session(actor=actor, ctx=ctx)
                 state.rate_limiter.allow(actor)
                 rows = state.connection_manager.list_objects(
                     _instance, database_name, object_type
@@ -1972,7 +2001,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                     required_privilege="read",
                     ctx=ctx,
                 )
-                state.session_manager.touch(actor, request_id)
+                _touch_session(actor=actor, ctx=ctx)
                 state.rate_limiter.allow(actor)
                 state.write_guard.enforce(_tool, sql_statement)
 
@@ -2142,7 +2171,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                         required_privilege="read",
                         ctx=ctx,
                     )
-                    state.session_manager.touch(actor, request_id)
+                    _touch_session(actor=actor, ctx=ctx)
                     state.rate_limiter.allow(actor)
                     state.write_guard.enforce(_tool, "SELECT 1")
 
@@ -2375,7 +2404,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                         required_privilege="read",
                         ctx=ctx,
                     )
-                    state.session_manager.touch(actor, request_id)
+                    _touch_session(actor=actor, ctx=ctx)
                     state.rate_limiter.allow(actor)
                     state.write_guard.enforce(_tool, "SELECT 1")
 
@@ -2673,7 +2702,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                         required_privilege="read",
                         ctx=ctx,
                     )
-                    state.session_manager.touch(actor, request_id)
+                    _touch_session(actor=actor, ctx=ctx)
                     state.rate_limiter.allow(actor)
                     state.write_guard.enforce(_tool, "SELECT 1")
 
@@ -2931,7 +2960,7 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                         required_privilege="read",
                         ctx=ctx,
                     )
-                    state.session_manager.touch(actor, request_id)
+                    _touch_session(actor=actor, ctx=ctx)
                     state.rate_limiter.allow(actor)
                     state.write_guard.enforce(_tool, "SELECT 1")
 
@@ -2987,6 +3016,9 @@ def register_sql_tools(mcp: FastMCP, state: Any) -> list[str]:
                         waiting_tasks=waiting_rows["rows"],
                         head_blockers=head_blockers,
                         blocking_chains=blocking_chain_rows["rows"],
+                        lookback_minutes=lookback_minutes,
+                        include_locks=include_locks,
+                        actor=actor,
                     )
 
                     dashboard_url = register_dashboard_page(

@@ -12,7 +12,7 @@ class SqlInstanceConfig(BaseModel):
     encrypt: bool = True
     trust_server_certificate: bool = False
     connect_timeout_sec: int = 5
-    command_timeout_sec: int = 30
+    command_timeout_sec: int = 0
     pool_min: int = 2
     pool_max: int = 20  # Restored to intended default; use --pool-max env var or YAML override to customize
     pool_enabled: bool = True

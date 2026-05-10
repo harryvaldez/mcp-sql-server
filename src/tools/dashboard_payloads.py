@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import html
 from datetime import datetime, timezone
 from typing import Any
@@ -122,20 +123,41 @@ def _esc(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
+def _to_int_or_none(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _js_string_literal(value: str) -> str:
+    """Return a JS-safe quoted string literal without raw HTML script delimiters."""
+    return (
+        json.dumps(value)
+        .replace("<", "\\u003C")
+        .replace(">", "\\u003E")
+        .replace("&", "\\u0026")
+    )
+
+
 def _session_row_class(session: dict[str, Any], head_blockers: set[int]) -> str:
     session_id = session.get("session_id")
-    try:
-        sid = int(session_id)
-    except (TypeError, ValueError):
+    if session_id is None:
         sid = -1
+    else:
+        try:
+            sid = int(session_id)
+        except (TypeError, ValueError):
+            sid = -1
 
     if sid in head_blockers:
         return "row-head-blocker"
 
     blocker = session.get("blocking_session_id")
-    try:
-        blocker_sid = int(blocker)
-    except (TypeError, ValueError):
+    blocker_sid = _to_int_or_none(blocker)
+    if blocker_sid is None:
         blocker_sid = 0
     if blocker_sid > 0:
         return "row-blocked"
@@ -198,17 +220,82 @@ def _html_header(
     lock_count: int,
     wait_count: int,
     chain_count: int,
+    lookback_minutes: int,
+    include_locks: bool,
+    actor: str,
 ) -> str:
+    controls = (
+        '<div class="meta">'
+        '<button id="refresh-dashboard" class="badge" type="button">Refresh</button>'
+        '<span id="refresh-status" class="muted"></span>'
+        f'<span class="badge">Lookback: {lookback_minutes} min</span>'
+        f'<span class="badge">Locks: {"On" if include_locks else "Off"}</span>'
+        "</div>"
+    )
     return (
         '<header class="card"><h1>SQL Server Sessions Dashboard</h1>'
         f'<div class="muted">Instance {instance_number} / Database {_esc(database_name)}</div>'
+        f'<div class="muted">Actor {_esc(actor)}</div>'
         f'<div class="muted">Generated {_esc(generated_at_utc)}</div>'
+        f"{controls}"
         '<div class="meta">'
         f'<span class="badge">Sessions: {session_count}</span>'
         f'<span class="badge">Lock Holders: {lock_count}</span>'
         f'<span class="badge">Waiting Tasks: {wait_count}</span>'
         f'<span class="badge">Chain Rows: {chain_count}</span>'
         "</div></header>"
+    )
+
+
+def _html_refresh_script(
+    instance_number: int,
+    database_name: str,
+    lookback_minutes: int,
+    include_locks: bool,
+    actor: str,
+) -> str:
+    include_locks_literal = "true" if include_locks else "false"
+    return (
+        "<script>\n"
+        "(() => {\n"
+        "  const button = document.getElementById('refresh-dashboard');\n"
+        "  const status = document.getElementById('refresh-status');\n"
+        "  if (!button || !status) return;\n"
+        f"  const instanceNumber = {instance_number};\n"
+        f"  const databaseName = {_js_string_literal(database_name)};\n"
+        f"  const lookbackMinutes = {lookback_minutes};\n"
+        f"  const includeLocks = {include_locks_literal};\n"
+        f"  const actor = {_js_string_literal(actor)};\n"
+        "  async function refreshDashboard() {\n"
+        "    button.disabled = true;\n"
+        "    status.textContent = 'Refreshing...';\n"
+        "    try {\n"
+        "      const params = new URLSearchParams({\n"
+        "        instance_number: String(instanceNumber),\n"
+        "        database_name: databaseName,\n"
+        "        lookback_minutes: String(lookbackMinutes),\n"
+        "        include_locks: String(includeLocks),\n"
+        "        actor\n"
+        "      });\n"
+        "      const response = await fetch(`/diagnostics/sessions-dashboard/runtime?${params.toString()}`, { cache: 'no-store' });\n"
+        "      if (!response.ok) {\n"
+        "        throw new Error(`HTTP ${response.status}`);\n"
+        "      }\n"
+        "      const payload = await response.json();\n"
+        "      if (!payload || typeof payload.html !== 'string') {\n"
+        "        throw new Error('Invalid payload format');\n"
+        "      }\n"
+        "      document.open();\n"
+        "      document.write(payload.html);\n"
+        "      document.close();\n"
+        "    } catch (error) {\n"
+        "      status.textContent = `Refresh failed: ${error}`;\n"
+        "      button.disabled = false;\n"
+        "    }\n"
+        "  }\n"
+        "  button.addEventListener('click', refreshDashboard);\n"
+        "})();\n"
+        "</script>"
     )
 
 
@@ -279,9 +366,8 @@ def _html_chain_section(
 
     wait_by_session: dict[int, str] = {}
     for row in waiting_tasks:
-        try:
-            sid = int(row.get("session_id"))
-        except (TypeError, ValueError):
+        sid = _to_int_or_none(row.get("session_id"))
+        if sid is None:
             continue
         if sid not in wait_by_session:
             wait_by_session[sid] = str(row.get("resource_description") or "")
@@ -290,10 +376,9 @@ def _html_chain_section(
     blocking_by_session: dict[int, int] = {}
     for row in blocking_chains:
         grouped.setdefault(str(row.get("blocking_session_id")), []).append(row)
-        try:
-            sid = int(row.get("session_id"))
-            bsid = int(row.get("blocking_session_id"))
-        except (TypeError, ValueError):
+        sid = _to_int_or_none(row.get("session_id"))
+        bsid = _to_int_or_none(row.get("blocking_session_id"))
+        if sid is None or bsid is None:
             continue
         if sid > 0 and bsid > 0:
             blocking_by_session[sid] = bsid
@@ -326,9 +411,8 @@ def _html_chain_section(
             "<table><thead><tr><th>Blocked SID</th><th>Login</th><th>Host</th><th>Command</th><th>Wait Type</th><th>Wait (ms)</th><th>Resource</th></tr></thead><tbody>"
         )
         for row in rows:
-            try:
-                sid = int(row.get("session_id"))
-            except (TypeError, ValueError):
+            sid = _to_int_or_none(row.get("session_id"))
+            if sid is None:
                 sid = -1
             depth = _depth_for_session(sid) if sid > 0 else 0
             chunks.append(
@@ -417,6 +501,9 @@ def build_sessions_dashboard_full(
     waiting_tasks: list[dict[str, Any]],
     head_blockers: list[int],
     blocking_chains: list[dict[str, Any]] | None = None,
+    lookback_minutes: int = 15,
+    include_locks: bool = True,
+    actor: str = "system",
 ) -> dict[str, Any]:
     """Build the full dashboard payload aligned with DASHBOARD_STATE_SCHEMA.
 
@@ -464,6 +551,16 @@ def build_sessions_dashboard_full(
         lock_count=len(tran_locks),
         wait_count=len(waiting_tasks),
         chain_count=len(chain_rows),
+        lookback_minutes=lookback_minutes,
+        include_locks=include_locks,
+        actor=actor,
+    )
+    refresh_script = _html_refresh_script(
+        instance_number=instance_number,
+        database_name=database_name,
+        lookback_minutes=lookback_minutes,
+        include_locks=include_locks,
+        actor=actor,
     )
 
     html_doc = (
@@ -477,6 +574,7 @@ def build_sessions_dashboard_full(
         f"{_html_chain_section(chain_rows, waiting_tasks)}"
         f"{_html_recommendations(recommendations)}"
         f"{_html_footer(generated_at_utc)}"
+        f"{refresh_script}"
         "</main></body></html>"
     )
 
