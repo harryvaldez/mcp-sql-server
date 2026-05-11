@@ -11,7 +11,7 @@ instances:
     encrypt: true
     trust_server_certificate: true
     connect_timeout_sec: 5
-    command_timeout_sec: 30
+    command_timeout_sec: 1200
     pool_min: 2
     pool_max: 10  # Conservative default; increase if /diagnostics/pool shows high utilization
     pool_enabled: true
@@ -27,7 +27,7 @@ instances:
     encrypt: true
     trust_server_certificate: true
     connect_timeout_sec: 5
-    command_timeout_sec: 30
+    command_timeout_sec: 1200
     pool_min: 2
     pool_max: 10
     pool_enabled: true
