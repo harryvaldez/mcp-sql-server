@@ -6,7 +6,7 @@ Remote FastMCP server for dual SQL Server 2019 instances with strong read-only c
 
 - FastMCP + FastAPI service exposing SQL tools over HTTP at /mcp
 - Dual-instance SQL Server 2019 support (primary and secondary)
-- Read-only SQL policy controls with denylist and allowlist config
+- Read-only SQL policy controls with denylist (13 patterns: DDL, DML, DCL, system procedures) and allowlist config
 - Redis or local rate limiting with per-actor and global limits
 - Security-oriented output handling (sensitive field redaction)
 - Diagnostics endpoints for runtime posture and tool usage
@@ -116,8 +116,8 @@ pytest -q
 
 Current validation snapshot:
 
-- Full test suite: `143 passed`
-- See [testing/artifacts/phase5-entra-pooling-summary.md](testing/artifacts/phase5-entra-pooling-summary.md) for rollout verification notes.
+- Full test suite: `196 passed`
+- See [docs/release-notes-v1.4.0.md](docs/release-notes-v1.4.0.md) for the latest release details.
 
 ## Security Notes
 
@@ -134,7 +134,7 @@ See CONTRIBUTING.md for branch, PR, and test expectations.
 
 - CI runs on pull requests and pushes to master/main.
 - Release tags follow v* (example: v1.2).
-- Latest release notes: [docs/release-notes-v1.3.0.md](docs/release-notes-v1.3.0.md)
+- Latest release notes: [docs/release-notes-v1.4.0.md](docs/release-notes-v1.4.0.md)
 
 ## CMMI-Oriented Platform Integration
 
