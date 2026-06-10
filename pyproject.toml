@@ -8,7 +8,7 @@ dependencies = [
   "fastapi>=0.115.0",
   "packaging>=24.0",
   "uvicorn>=0.30.0",
-  "prefab-ui==0.19.1",
+  "prefab-ui==0.20.2",
   "pydantic>=2.8.0",
   "PyYAML>=6.0.1",
   "prometheus-client>=0.20.0",
